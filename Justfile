@@ -165,8 +165,12 @@ check:
 test:
     pnpm test
 
+# Build frontend assets and card manifests (parity: ghost build:assets)
+build-assets:
+    pnpm --filter ghost build:assets
+
 # Run Ghost Core server unit tests (vitest run - 8,500+ tests in ~25s)
-test-unit:
+test-unit: build-assets
     pnpm --filter ghost test:unit
 
 # Run monorepo unit tests across all 35 packages (parity: pnpm test:unit)
@@ -182,11 +186,11 @@ test-types-core:
     pnpm --filter ghost test:types
 
 # Run full Ghost Core database integration test suite against rootless MySQL socket (56 files / 514 tests)
-test-integration *args: db-up
+test-integration *args: db-up build-assets
     {{ DB_ENV }} pnpm --filter ghost exec vitest run -c vitest.config.db.ts --project integration {{ args }}
 
 # Run fast database integration smoke test (offers API - 2 tests in ~8s)
-test-integration-smoke: db-up
+test-integration-smoke: db-up build-assets
     {{ DB_ENV }} pnpm --filter ghost exec vitest run -c vitest.config.db.ts --project integration test/integration/services/offers-api.test.js
 
 # Run Ghost Core database E2E tests against rootless MySQL socket (parity: ghost test:e2e)

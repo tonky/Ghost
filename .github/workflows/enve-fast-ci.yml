@@ -23,6 +23,7 @@ env:
   FORCE_COLOR: 1
   DISABLE_V8_COMPILE_CACHE: 1
   NX_NATIVE_COMMAND_RUNNER: 'false'
+  TZ: 'America/New_York'
 
 jobs:
   fast-pr-gatekeeper:
