@@ -54,19 +54,10 @@ devEnv: schema.#DevEnvironment & {
 		}
 	}
 	environment: env.#NodeEnv & env.#PosixEnv & {
-		NODE_ENV:                         "development"
-		FORCE_COLOR:                      "1"
-		DISABLE_V8_COMPILE_CACHE:         "1"
-		NX_NATIVE_COMMAND_RUNNER:         "false"
-		database__client:                 "mysql2"
-		database__connection__socketPath: ".enve/run/mysql.sock"
-		database__connection__user:       "root"
-		database__connection__password:   "root"
-		database__connection__database:   "ghost_dev"
-		database__connection__charset:    "utf8mb4"
-		mail__transport:                  "SMTP"
-		mail__options__host:              "127.0.0.1"
-		mail__options__port:              1025
+		NODE_ENV:                 "development"
+		FORCE_COLOR:              "1"
+		DISABLE_V8_COMPILE_CACHE: "1"
+		NX_NATIVE_COMMAND_RUNNER: "false"
 	}
 	shellHook: """
 		mkdir -p .enve/run .enve/data/mysql .enve/data/redis

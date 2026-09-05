@@ -103,7 +103,7 @@ jobs:
         run: |
           enve run -- just lint-pkgs
 
-      - name: Monorepo Unit Test Suites (35 Projects)
+      - name: Ghost Core Unit Test Suite (8,547 Vitest Tests)
         shell: bash
         run: |
           enve run -- just test-unit
@@ -111,5 +111,4 @@ jobs:
       - name: Rootless MySQL Database Integration & Migrations Smoke Test
         shell: bash
         run: |
-          enve run -- env database__connection__socketPath="$PWD/.enve/run/mysql.sock" database__connection__password="root" just db-up
-          enve run -- env database__connection__socketPath="$PWD/.enve/run/mysql.sock" database__connection__password="root" pnpm --filter ghost exec vitest run -c vitest.config.db.ts --project integration test/integration/migrations/
+          enve run -- just test-integration
