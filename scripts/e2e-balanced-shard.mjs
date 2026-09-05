@@ -59,36 +59,56 @@ function parseArgs() {
   return { shardIndex, shardTotal, jsonOutput };
 }
 
+function getFileWeight(file, timings) {
+  if (timings && typeof timings[file] === 'number') {
+    return timings[file];
+  }
+  const fullPath = path.join(E2E_DIR, file);
+  const content = fs.readFileSync(fullPath, 'utf8');
+  const count = (content.match(/\btest(\.only|\.skip)?\s*\(/g) || []).length || 1;
+  const isPerTest = content.includes('usePerTestIsolation');
+  return count * (isPerTest ? 20.0 : 10.0);
+}
+
 function main() {
   const { shardIndex, shardTotal, jsonOutput } = parseArgs();
   const allFiles = walk(path.join(E2E_DIR, 'tests')).sort();
 
-  const heavy = [];
-  const normal = [];
-
-  for (const file of allFiles) {
-    const fullPath = path.join(E2E_DIR, file);
-    const content = fs.readFileSync(fullPath, 'utf8');
-    if (content.includes('usePerTestIsolation')) {
-      heavy.push(file);
-    } else {
-      normal.push(file);
+  let timings = null;
+  const timingsPath = path.join(__dirname, 'e2e-file-timings.json');
+  if (fs.existsSync(timingsPath)) {
+    try {
+      timings = JSON.parse(fs.readFileSync(timingsPath, 'utf8'));
+    } catch {
+      timings = null;
     }
   }
 
-  const buckets = Array.from({ length: shardTotal }, () => []);
+  const fileStats = allFiles.map((file) => ({
+    file,
+    weight: getFileWeight(file, timings),
+  }));
 
-  // Distribute heavy files first round-robin
-  heavy.forEach((file, idx) => {
-    buckets[idx % shardTotal].push(file);
-  });
+  // LPT (Longest Processing Time first) deterministic bin-packing
+  fileStats.sort((a, b) => b.weight - a.weight || a.file.localeCompare(b.file));
 
-  // Distribute normal files in reverse round-robin to balance total weight
-  normal.forEach((file, idx) => {
-    buckets[shardTotal - 1 - (idx % shardTotal)].push(file);
-  });
+  const buckets = Array.from({ length: shardTotal }, () => ({
+    files: [],
+    weight: 0,
+  }));
 
-  const selectedFiles = buckets[shardIndex - 1] || [];
+  for (const item of fileStats) {
+    let minBucket = buckets[0];
+    for (let i = 1; i < buckets.length; i++) {
+      if (buckets[i].weight < minBucket.weight) {
+        minBucket = buckets[i];
+      }
+    }
+    minBucket.files.push(item.file);
+    minBucket.weight += item.weight;
+  }
+
+  const selectedFiles = (buckets[shardIndex - 1] && buckets[shardIndex - 1].files) || [];
 
   if (jsonOutput) {
     console.log(JSON.stringify(selectedFiles));
