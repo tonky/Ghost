@@ -24,7 +24,6 @@ env:
   DISABLE_V8_COMPILE_CACHE: 1
   NX_NATIVE_COMMAND_RUNNER: 'false'
   TZ: 'America/New_York'
-  NODE_OPTIONS: '--conditions=source'
 
 jobs:
   fast-quality-gate:
@@ -339,15 +338,13 @@ jobs:
           node-version: 22.23.1
           trust-lockfile: 'true'
 
-      - name: Concurrently Build Admin and E2E Public Apps
+      - name: Build Admin and E2E Public Apps
         shell: bash
+        env:
+          NODE_ENV: production
         run: |
-          pnpm nx run @tryghost/admin:build &
-          pid_admin=$!
-          pnpm --filter @tryghost/e2e build:apps &
-          pid_apps=$!
-          wait $pid_admin
-          wait $pid_apps
+          pnpm nx run @tryghost/admin:build
+          pnpm --filter @tryghost/e2e build:apps
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
