@@ -59,19 +59,20 @@ We benchmarked the official upstream Ghost CI pipeline on `TryGhost/Ghost` again
 
 ### 2.1 Empirical Benchmark Results
 
-| Metric / Dimension | Upstream Ghost CI (`TryGhost/Ghost`) | Modernized `enve` PR Gatekeeper (`tonky/Ghost`) | Improvement / Delta |
-| :--- | :--- | :--- | :--- |
-| **Evidence Run** | [TryGhost/Ghost #31000619992](https://github.com/TryGhost/Ghost/actions/runs/31000619992) | [tonky/Ghost #33957611832](https://github.com/tonky/Ghost/actions/runs/33957611832) | **Verified 100% Green** |
-| **Total Jobs Spawned** | **48 jobs** (41 active runners) | **1 consolidated job** | **41x reduction** in orchestration sprawl |
-| **Total Runner Compute** | **143 runner-minutes** | **2 runner-minutes** | **98.6% compute reduction** ⚡ |
-| **Wall-Clock Turnaround** | **16 minutes 47 seconds** | **2 minutes 0 seconds** | **8.4x faster feedback** 🚀 |
-| **Database Architecture** | Heavy Docker containers (`mysql:8.0`) | Ephemeral rootless MySQL 8.4 over UNIX socket | **Instant startup (<1s), Zero port 3306 collisions** |
-| **External Network Pulls** | Docker Hub pulls + NPM registry hits on every job | Hermetic L1/L2 zero-egress Cloudflare R2 cache | **Deterministic, immune to registry downtime** |
-| **Supply Chain Security** | Ad-hoc or absent in PR gating | Integrated `enve shield` CVE vulnerability audit | **Immediate block on vulnerable dependencies** |
+| Metric / Dimension         | Upstream Ghost CI (`TryGhost/Ghost`)                                                      | Modernized `enve` PR Gatekeeper (`tonky/Ghost`)                                     | Improvement / Delta                                  |
+| :------------------------- | :---------------------------------------------------------------------------------------- | :---------------------------------------------------------------------------------- | :--------------------------------------------------- |
+| **Evidence Run**           | [TryGhost/Ghost #31000619992](https://github.com/TryGhost/Ghost/actions/runs/31000619992) | [tonky/Ghost #33957611832](https://github.com/tonky/Ghost/actions/runs/33957611832) | **Verified 100% Green**                              |
+| **Total Jobs Spawned**     | **48 jobs** (41 active runners)                                                           | **1 consolidated job**                                                              | **41x reduction** in orchestration sprawl            |
+| **Total Runner Compute**   | **143 runner-minutes**                                                                    | **2 runner-minutes**                                                                | **98.6% compute reduction** ⚡                       |
+| **Wall-Clock Turnaround**  | **16 minutes 47 seconds**                                                                 | **2 minutes 0 seconds**                                                             | **8.4x faster feedback** 🚀                          |
+| **Database Architecture**  | Heavy Docker containers (`mysql:8.0`)                                                     | Ephemeral rootless MySQL 8.4 over UNIX socket                                       | **Instant startup (<1s), Zero port 3306 collisions** |
+| **External Network Pulls** | Docker Hub pulls + NPM registry hits on every job                                         | Hermetic L1/L2 zero-egress Cloudflare R2 cache                                      | **Deterministic, immune to registry downtime**       |
+| **Supply Chain Security**  | Ad-hoc or absent in PR gating                                                             | Integrated `enve shield` CVE vulnerability audit                                    | **Immediate block on vulnerable dependencies**       |
 
 ### 2.2 What the `enve` Fast Gatekeeper Executes in 2m 0s
 
 In a single unprivileged GitHub Actions runner (`ubuntu-latest`), `enve` verifies the entire pull request:
+
 1. **Zero-Egress Hermetic Toolchain** (4s): Restores pinned Node.js 22.22.1, pnpm 12.2.1, Oracle MySQL 8.4, and native build toolchain from Cloudflare R2.
 2. **Deterministic Monorepo Hydration** (12s): Frozen lockfile `pnpm install` with pre-cached tarballs.
 3. **Supply Chain Security Gate** (1s): `enve shield` audits the full dependency tree against live CVE databases.
@@ -85,11 +86,13 @@ In a single unprivileged GitHub Actions runner (`ubuntu-latest`), `enve` verifie
 ## 3. Financial & Operational ROI Analysis
 
 ### Upstream CI Annual Baseline
+
 - **Run Frequency**: ~35 runs/day (~1,050 runs/month) across PRs and main commits.
 - **Compute Volume**: 143 runner-minutes × 1,050 runs = **~150,000 runner-minutes / month**.
 - **Estimated Cloud Spend**: **\$15,000 – \$22,000 / year** on GitHub Actions and Blacksmith runner compute.
 
 ### Annual Savings with `enve`
+
 - **Runner Compute Saved**: Fast PR Gatekeeper saves ~140 runner-minutes per PR iteration, slashing monthly compute by **~85,000 minutes/month (~56% overall reduction)**.
 - **Direct Cloud Bill Reduction**: **\$8,000 – \$14,000 / year** saved on GitHub Actions runner minutes.
 - **Developer Productivity Unlocked**: Core developers wait **2 minutes instead of 17 minutes** for PR approval. Across 25 engineers, this recovers **~220 engineering hours per month**, valued at **~$195,000 / year** in recaptured engineering velocity.
@@ -131,4 +134,3 @@ enve run -- just test-integration test/integration/services/offers-api.test.js
 # 7. Stop background microservices
 enve run -- just db-down
 ```
-
