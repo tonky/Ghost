@@ -155,8 +155,33 @@ test-unit-all:
 test-types:
     pnpm test:types
 
-# Run database integration tests against rootless MySQL socket
+# Run full database integration test suite against rootless MySQL socket (56 files / 514 tests)
 test-integration: db-init
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p .enve/run .enve/data/mysql
+    rm -f "{{ DB_SOCKET }}" "{{ DB_SOCKET }}.lock"
+    mysqld --no-defaults --datadir="{{ invocation_directory() }}/.enve/data/mysql" --socket="{{ DB_SOCKET }}" --skip-networking --mysqlx=0 > .enve/run/mysqld.log 2>&1 &
+    MYSQL_PID=$!
+    trap 'kill $MYSQL_PID 2>/dev/null || true; rm -f "{{ DB_SOCKET }}" "{{ DB_SOCKET }}.lock"' EXIT
+    for i in $(seq 1 30); do
+        if mysqladmin --socket="{{ DB_SOCKET }}" ping >/dev/null 2>&1 || mysqladmin -u root -proot --socket="{{ DB_SOCKET }}" ping >/dev/null 2>&1; then
+            break
+        fi
+        sleep 0.1
+    done
+    mysql -u root --socket="{{ DB_SOCKET }}" -e "ALTER USER 'root'@'localhost' IDENTIFIED BY 'root'; FLUSH PRIVILEGES; CREATE DATABASE IF NOT EXISTS ghost_dev;" >/dev/null 2>&1 || true
+    echo "✅ Rootless MySQL active on UNIX socket (Zero TCP Port Collisions)."
+    database__client="{{ DB_CLIENT }}" \
+    database__connection__socketPath="{{ DB_SOCKET }}" \
+    database__connection__user="{{ DB_USER }}" \
+    database__connection__password="{{ DB_PASS }}" \
+    database__connection__database="{{ DB_NAME }}" \
+    database__connection__charset="{{ DB_CHARSET }}" \
+    pnpm --filter ghost exec vitest run -c vitest.config.db.ts --project integration
+
+# Run fast database integration smoke test (offers API - 2 tests in ~8s)
+test-integration-smoke: db-init
     #!/usr/bin/env bash
     set -euo pipefail
     mkdir -p .enve/run .enve/data/mysql

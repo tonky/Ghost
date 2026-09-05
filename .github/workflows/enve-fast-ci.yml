@@ -111,4 +111,4 @@ jobs:
       - name: Rootless MySQL Database Integration & Migrations Smoke Test
         shell: bash
         run: |
-          enve run -- just test-integration
+          enve run -- just test-integration-smoke

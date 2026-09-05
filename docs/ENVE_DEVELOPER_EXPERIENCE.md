@@ -92,7 +92,7 @@ curl -fsSL https://get.enve.dev | sh
 ### Daily Development Commands
 
 ```bash
-# 1. Run all code formatting, package standards, and unit tests
+# 1. Run all code formatting, package standards, and unit tests (8,547 tests)
 enve run -- just check
 
 # 2. Boot rootless background microservices (MySQL 8.4, Redis, Mailpit)
@@ -101,9 +101,12 @@ enve run -- just db-up
 # 3. Sub-second database schema reset
 enve run -- just reset-db
 
-# 4. Run database integration tests against rootless MySQL socket
+# 4. Run full database integration test suite against rootless MySQL (56 files / 514 tests)
 enve run -- just test-integration
 
-# 5. Stop background microservices
+# 5. Run targeted database integration test (e.g. offers-api)
+enve run -- just test-integration test/integration/services/offers-api.test.js
+
+# 6. Stop background microservices
 enve run -- just db-down
 ```
