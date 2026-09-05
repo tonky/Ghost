@@ -195,15 +195,15 @@ test-integration-smoke: db-up build-assets
     {{ DB_ENV }} pnpm --filter ghost exec vitest run -c vitest.config.db.ts --project integration test/integration/services/offers-api.test.js
 
 # Run Ghost Core database E2E tests against rootless MySQL socket (parity: ghost test:e2e)
-test-e2e *args: db-up
+test-e2e *args: db-up build-assets
     {{ DB_ENV }} pnpm --filter ghost exec vitest run -c vitest.config.db.ts --project e2e --project e2e-api --project e2e-isolated {{ args }}
 
 # Run Ghost Core legacy database tests against rootless MySQL socket (parity: ghost test:legacy)
-test-legacy *args: db-up
+test-legacy *args: db-up build-assets
     {{ DB_ENV }} pnpm --filter ghost exec vitest run -c vitest.config.db.ts --project legacy {{ args }}
 
 # Run all Ghost Core test suites together (parity: ghost test:all)
-test-all: db-up
+test-all: db-up build-assets
     {{ DB_ENV }} pnpm --filter ghost test:all
 
 

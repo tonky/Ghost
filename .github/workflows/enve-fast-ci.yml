@@ -27,8 +27,8 @@ env:
   NODE_OPTIONS: '--conditions=source'
 
 jobs:
-  fast-pr-gatekeeper:
-    name: 'Fast PR Gatekeeper (Formatting, Standards, Unit & Database Smoke Tests)'
+  fast-quality-gate:
+    name: 'Quality & Core Unit Tests (8,547 Tests)'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -110,7 +110,119 @@ jobs:
         run: |
           enve run -- just test-unit
 
-      - name: Rootless MySQL Database Integration & Migrations Smoke Test
+      - name: Database Integration Smoke Test
         shell: bash
         run: |
           enve run -- just test-integration-smoke
+
+  legacy-tests:
+    name: 'Legacy Database Tests (MySQL 8.4 Rootless Socket)'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository with submodules
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+          fetch-depth: 50
+
+      - name: Initialize Nix Store Directory
+        shell: bash
+        run: |
+          sudo mkdir -p /nix/store
+          sudo chown -R $(whoami) /nix
+
+      - name: Restore Nix Store Closures (L1 Cache)
+        uses: actions/cache/restore@v6
+        id: nix-store-cache
+        with:
+          path: /nix/store
+          key: nix-store-ghost-${{ runner.os }}-${{ hashFiles('enve.lock') }}
+          restore-keys: |
+            nix-store-ghost-${{ runner.os }}-
+            nix-store-${{ runner.os }}-
+
+      - name: Install hermetic enve binary from private cache
+        shell: bash
+        run: |
+          scripts/fetch_enve.sh /usr/local/bin/enve
+          enve --version
+
+      - name: Synchronize Pre-built Closures (L1 / L2 Zero-Egress R2)
+        shell: bash
+        run: |
+          enve cache pull enve.lock -j 4 --cache "${CLOUDFLARE_BUCKET}" --trusted-public-key "${ENVE_CACHE_PUBLIC_KEY}" || true
+
+      - name: Restore pnpm package cache
+        uses: actions/cache@v6
+        with:
+          path: ~/.local/share/pnpm/store
+          key: pnpm-store-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            pnpm-store-${{ runner.os }}-
+
+      - name: Hydrate Monorepo Workspace Dependencies
+        shell: bash
+        run: |
+          enve run -- pnpm install --frozen-lockfile
+
+      - name: Ghost Core Legacy Test Suite (35 Files / 458 Tests on Rootless Socket)
+        shell: bash
+        run: |
+          enve run -- just test-legacy
+
+  integration-tests:
+    name: 'Integration Database Tests (MySQL 8.4 Rootless Socket)'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository with submodules
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+          fetch-depth: 50
+
+      - name: Initialize Nix Store Directory
+        shell: bash
+        run: |
+          sudo mkdir -p /nix/store
+          sudo chown -R $(whoami) /nix
+
+      - name: Restore Nix Store Closures (L1 Cache)
+        uses: actions/cache/restore@v6
+        id: nix-store-cache
+        with:
+          path: /nix/store
+          key: nix-store-ghost-${{ runner.os }}-${{ hashFiles('enve.lock') }}
+          restore-keys: |
+            nix-store-ghost-${{ runner.os }}-
+            nix-store-${{ runner.os }}-
+
+      - name: Install hermetic enve binary from private cache
+        shell: bash
+        run: |
+          scripts/fetch_enve.sh /usr/local/bin/enve
+          enve --version
+
+      - name: Synchronize Pre-built Closures (L1 / L2 Zero-Egress R2)
+        shell: bash
+        run: |
+          enve cache pull enve.lock -j 4 --cache "${CLOUDFLARE_BUCKET}" --trusted-public-key "${ENVE_CACHE_PUBLIC_KEY}" || true
+
+      - name: Restore pnpm package cache
+        uses: actions/cache@v6
+        with:
+          path: ~/.local/share/pnpm/store
+          key: pnpm-store-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            pnpm-store-${{ runner.os }}-
+
+      - name: Hydrate Monorepo Workspace Dependencies
+        shell: bash
+        run: |
+          enve run -- pnpm install --frozen-lockfile
+
+      - name: Ghost Core Integration Test Suite (56 Files / 514 Tests on Rootless Socket)
+        shell: bash
+        run: |
+          enve run -- just test-integration
