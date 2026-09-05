@@ -11,6 +11,7 @@ export FORCE_COLOR := "1"
 export DISABLE_V8_COMPILE_CACHE := "1"
 export NX_NATIVE_COMMAND_RUNNER := "false"
 export TZ := "America/New_York"
+export NODE_OPTIONS := "--conditions=source"
 
 # Explicit configuration for rootless MySQL over UNIX domain socket
 DB_CLIENT := "mysql2"

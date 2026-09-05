@@ -24,6 +24,7 @@ env:
   DISABLE_V8_COMPILE_CACHE: 1
   NX_NATIVE_COMMAND_RUNNER: 'false'
   TZ: 'America/New_York'
+  NODE_OPTIONS: '--conditions=source'
 
 jobs:
   fast-pr-gatekeeper:
