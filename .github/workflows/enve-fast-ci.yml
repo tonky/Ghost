@@ -359,19 +359,36 @@ jobs:
           file: Dockerfile.production
           target: full
           load: true
-          tags: ghost:latest
+          tags: ghost-base:local
           build-args: |
             NODE_VERSION=22.23.1
 
       - name: Build Ghost E2E Public App Layer
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: e2e/Dockerfile.e2e
-          load: true
-          tags: ghost-e2e:local
-          build-args: |
-            GHOST_IMAGE=ghost:latest
+        shell: bash
+        run: |
+          echo "Staging clean context for E2E image build..."
+          STAGING="${RUNNER_TEMP:-/tmp}/e2e-context"
+          rm -rf "$STAGING"
+          mkdir -p "$STAGING"/apps/{portal,comments-ui,sodo-search,signup-form,announcement-bar}
+          cp -r apps/portal/umd "$STAGING"/apps/portal/
+          cp -r apps/comments-ui/umd "$STAGING"/apps/comments-ui/
+          cp -r apps/sodo-search/umd "$STAGING"/apps/sodo-search/
+          cp -r apps/signup-form/umd "$STAGING"/apps/signup-form/
+          cp -r apps/announcement-bar/umd "$STAGING"/apps/announcement-bar/
+          cp e2e/Dockerfile.e2e "$STAGING"/Dockerfile
+          docker build \
+            --build-arg GHOST_IMAGE=ghost-base:local \
+            -t ghost-e2e:local \
+            "$STAGING"
+          rm -rf "$STAGING"
+
+      - name: Verify E2E Image Assets
+        shell: bash
+        run: |
+          echo "Verifying ghost-e2e:local assets..."
+          docker run --rm ghost-e2e:local ls -la /home/ghost/content/files/portal
+          docker run --rm ghost-e2e:local ls -la /home/ghost/content/files/announcement-bar
+          docker run --rm ghost-e2e:local ls -la /home/ghost/core/built/admin
 
       - name: Fast Multi-Threaded Image Compression (pigz -1)
         shell: bash
@@ -461,6 +478,14 @@ jobs:
         if: always()
         shell: bash
         run: pnpm --filter @tryghost/e2e infra:down
+
+      - name: Upload Playwright Failure Artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-failure-shard-${{ matrix.shard }}
+          path: e2e/test-results/
+          retention-days: 3
 
   ci-summary:
     name: 'CI Summary & Parity Verification'
