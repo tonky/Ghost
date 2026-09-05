@@ -34,6 +34,11 @@ printf -v project_args_string '%q ' "${project_args[@]}"
 # steps converge on the same tag.
 ensure_playwright_image
 
+shard_args="--shard=${SHARD_INDEX}/${SHARD_TOTAL}"
+if [[ -n "${E2E_SHARD_FILES:-}" ]]; then
+  shard_args="${E2E_SHARD_FILES}"
+fi
+
 docker run --rm --network host --ipc host \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -v "${WORKSPACE_PATH}:${WORKSPACE_PATH}" \
@@ -46,4 +51,5 @@ docker run --rm --network host --ipc host \
   -e GHOST_E2E_GATEWAY_IMAGE="${GHOST_E2E_GATEWAY_IMAGE:-caddy:2-alpine}" \
   -e GHOST_E2E_ANALYTICS="${GHOST_E2E_ANALYTICS:-true}" \
   "$PLAYWRIGHT_IMAGE" \
-  bash -c "corepack enable && bash ./scripts/run-playwright-host.sh pnpm exec playwright test ${project_args_string}--shard=${SHARD_INDEX}/${SHARD_TOTAL} --retries=${RETRIES}"
+  bash -c "corepack enable && bash ./scripts/run-playwright-host.sh pnpm exec playwright test ${project_args_string}${shard_args} --retries=${RETRIES}"
+

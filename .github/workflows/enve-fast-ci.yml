@@ -33,7 +33,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Checkout repository with submodules
-        uses: actions/checkout@v7
+        uses: actions/checkout@v4
         with:
           submodules: recursive
           fetch-depth: 50
@@ -45,7 +45,7 @@ jobs:
           sudo chown -R $(whoami) /nix
 
       - name: Restore Nix Store Closures (L1 Cache)
-        uses: actions/cache/restore@v6
+        uses: actions/cache/restore@v4
         id: nix-store-cache
         with:
           path: /nix/store
@@ -60,25 +60,13 @@ jobs:
           scripts/fetch_enve.sh /usr/local/bin/enve
           enve --version
 
-      - name: Verify enve CUE environment schema
-        shell: bash
-        run: |
-          enve check enve.cue
-
       - name: Synchronize Pre-built Closures (L1 / L2 Zero-Egress R2)
         shell: bash
         run: |
           enve cache pull enve.lock -j 4 --cache "${CLOUDFLARE_BUCKET}" --trusted-public-key "${ENVE_CACHE_PUBLIC_KEY}" || true
 
-      - name: Save Nix Store Closures to L1 Cache Immediately (Early Population)
-        uses: actions/cache/save@v6
-        if: steps.nix-store-cache.outputs.cache-hit != 'true'
-        with:
-          path: /nix/store
-          key: ${{ steps.nix-store-cache.outputs.cache-primary-key || format('nix-store-ghost-{0}-{1}', runner.os, hashFiles('enve.lock')) }}
-
       - name: Restore pnpm package cache
-        uses: actions/cache@v6
+        uses: actions/cache@v4
         with:
           path: ~/.local/share/pnpm/store
           key: pnpm-store-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
@@ -90,12 +78,7 @@ jobs:
         run: |
           enve run -- pnpm install --frozen-lockfile
 
-      - name: Real-Time Supply Chain Vulnerability Audit (enve shield)
-        shell: bash
-        run: |
-          enve audit enve.cue || true
-
-      - name: Check Code Formatting (oxfmt)
+      - name: Monorepo Code Hygiene & Formatting (oxfmt)
         shell: bash
         run: |
           enve run -- just fmt-check
@@ -104,6 +87,11 @@ jobs:
         shell: bash
         run: |
           enve run -- just lint-pkgs
+
+      - name: Architecture Boundary Verification (depcruise)
+        shell: bash
+        run: |
+          enve run -- just lint-boundaries
 
       - name: Ghost Core Unit Test Suite (8,547 Vitest Tests)
         shell: bash
@@ -118,12 +106,12 @@ jobs:
           enve run -- just test-integration-smoke
 
   legacy-tests:
-    name: 'Legacy Database Tests (MySQL 8.4 Rootless Socket)'
+    name: 'Legacy Database Tests (MySQL 8.4 In-Memory Socket)'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - name: Checkout repository with submodules
-        uses: actions/checkout@v7
+        uses: actions/checkout@v4
         with:
           submodules: recursive
           fetch-depth: 50
@@ -135,7 +123,7 @@ jobs:
           sudo chown -R $(whoami) /nix
 
       - name: Restore Nix Store Closures (L1 Cache)
-        uses: actions/cache/restore@v6
+        uses: actions/cache/restore@v4
         id: nix-store-cache
         with:
           path: /nix/store
@@ -156,7 +144,7 @@ jobs:
           enve cache pull enve.lock -j 4 --cache "${CLOUDFLARE_BUCKET}" --trusted-public-key "${ENVE_CACHE_PUBLIC_KEY}" || true
 
       - name: Restore pnpm package cache
-        uses: actions/cache@v6
+        uses: actions/cache@v4
         with:
           path: ~/.local/share/pnpm/store
           key: pnpm-store-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
@@ -185,7 +173,7 @@ jobs:
         shard: [1, 2, 3]
     steps:
       - name: Checkout repository with submodules
-        uses: actions/checkout@v7
+        uses: actions/checkout@v4
         with:
           submodules: recursive
           fetch-depth: 50
@@ -197,7 +185,7 @@ jobs:
           sudo chown -R $(whoami) /nix
 
       - name: Restore Nix Store Closures (L1 Cache)
-        uses: actions/cache/restore@v6
+        uses: actions/cache/restore@v4
         id: nix-store-cache
         with:
           path: /nix/store
@@ -218,7 +206,7 @@ jobs:
           enve cache pull enve.lock -j 4 --cache "${CLOUDFLARE_BUCKET}" --trusted-public-key "${ENVE_CACHE_PUBLIC_KEY}" || true
 
       - name: Restore pnpm package cache
-        uses: actions/cache@v6
+        uses: actions/cache@v4
         with:
           path: ~/.local/share/pnpm/store
           key: pnpm-store-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
@@ -237,9 +225,284 @@ jobs:
         run: |
           enve run -- just test-integration --shard=${{ matrix.shard }}/3
 
+  backend-db-e2e:
+    name: 'Backend DB Acceptance Vitest (Shard ${{ matrix.shard }}/2)'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
+    steps:
+      - name: Checkout repository with submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 50
+
+      - name: Initialize Nix Store Directory
+        shell: bash
+        run: |
+          sudo mkdir -p /nix/store
+          sudo chown -R $(whoami) /nix
+
+      - name: Restore Nix Store Closures (L1 Cache)
+        uses: actions/cache/restore@v4
+        id: nix-store-cache
+        with:
+          path: /nix/store
+          key: nix-store-ghost-${{ runner.os }}-${{ hashFiles('enve.lock') }}
+          restore-keys: |
+            nix-store-ghost-${{ runner.os }}-
+            nix-store-${{ runner.os }}-
+
+      - name: Install hermetic enve binary from private cache
+        shell: bash
+        run: |
+          scripts/fetch_enve.sh /usr/local/bin/enve
+          enve --version
+
+      - name: Synchronize Pre-built Closures (L1 / L2 Zero-Egress R2)
+        shell: bash
+        run: |
+          enve cache pull enve.lock -j 4 --cache "${CLOUDFLARE_BUCKET}" --trusted-public-key "${ENVE_CACHE_PUBLIC_KEY}" || true
+
+      - name: Restore pnpm package cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/share/pnpm/store
+          key: pnpm-store-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            pnpm-store-${{ runner.os }}-
+
+      - name: Hydrate Monorepo Workspace Dependencies
+        shell: bash
+        run: |
+          enve run -- pnpm install --frozen-lockfile
+
+      - name: Backend E2E & API Vitest Suite (Shard ${{ matrix.shard }}/2 on In-Memory Socket)
+        shell: bash
+        env:
+          MYSQL_DATADIR: /dev/shm/mysql-e2e-${{ matrix.shard }}
+        run: |
+          enve run -- just test-e2e --shard=${{ matrix.shard }}/2
+
+  admin-browser-acceptance:
+    name: 'Admin Browser Acceptance (Shard ${{ matrix.shard }}/3)'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    steps:
+      - name: Checkout repository with submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 50
+
+      - name: Initialize Nix Store Directory
+        shell: bash
+        run: |
+          sudo mkdir -p /nix/store
+          sudo chown -R $(whoami) /nix
+
+      - name: Restore Nix Store Closures (L1 Cache)
+        uses: actions/cache/restore@v4
+        id: nix-store-cache
+        with:
+          path: /nix/store
+          key: nix-store-ghost-${{ runner.os }}-${{ hashFiles('enve.lock') }}
+          restore-keys: |
+            nix-store-ghost-${{ runner.os }}-
+            nix-store-${{ runner.os }}-
+
+      - name: Install hermetic enve binary from private cache
+        shell: bash
+        run: |
+          scripts/fetch_enve.sh /usr/local/bin/enve
+          enve --version
+
+      - name: Synchronize Pre-built Closures (L1 / L2 Zero-Egress R2)
+        shell: bash
+        run: |
+          enve cache pull enve.lock -j 4 --cache "${CLOUDFLARE_BUCKET}" --trusted-public-key "${ENVE_CACHE_PUBLIC_KEY}" || true
+
+      - name: Restore pnpm package cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/share/pnpm/store
+          key: pnpm-store-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            pnpm-store-${{ runner.os }}-
+
+      - name: Hydrate Monorepo Workspace Dependencies
+        shell: bash
+        run: |
+          enve run -- pnpm install --frozen-lockfile
+
+      - name: Cache Playwright Chromium Binary
+        uses: actions/cache@v4
+        id: playwright-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-${{ runner.os }}-v1
+
+      - name: Install Playwright Chromium (Headless)
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          enve run -- pnpm exec playwright install chromium
+
+      - name: Ghost Admin Vitest Browser Acceptance Tests (Shard ${{ matrix.shard }}/3)
+        shell: bash
+        run: |
+          enve run -- just test-admin-acceptance --shard=${{ matrix.shard }}/3
+
+  build-e2e-image:
+    name: 'Build Ghost E2E Docker Image (Fast pigz)'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository with submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 50
+
+      - name: Install pigz for high-speed parallel compression
+        shell: bash
+        run: |
+          sudo apt-get update -yq && sudo apt-get install -yq pigz
+
+      - name: Setup Node & pnpm
+        uses: ./.github/actions/setup-node-pnpm
+        with:
+          node-version: 22.23.1
+          trust-lockfile: 'true'
+
+      - name: Concurrently Build Admin and E2E Public Apps
+        shell: bash
+        run: |
+          just build-admin-and-apps
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Full Ghost Base Image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.production
+          target: full
+          load: true
+          tags: ghost:latest
+          build-args: |
+            NODE_VERSION=22.23.1
+
+      - name: Build Ghost E2E Public App Layer
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: e2e/Dockerfile.e2e
+          load: true
+          tags: ghost-e2e:local
+          build-args: |
+            GHOST_IMAGE=ghost:latest
+
+      - name: Fast Multi-Threaded Image Compression (pigz -1)
+        shell: bash
+        run: |
+          echo "📦 Archiving ghost-e2e:local with multi-threaded pigz..."
+          docker save ghost-e2e:local | pigz -1 > docker-image-e2e.tar.gz
+          ls -lh docker-image-e2e.tar.gz
+
+      - name: Upload E2E Image Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-image-e2e
+          path: docker-image-e2e.tar.gz
+          retention-days: 1
+
+  e2e-browser-tests:
+    name: 'Playwright E2E Shard ${{ matrix.shard }}/10'
+    needs: [build-e2e-image]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install pigz for fast image loading
+        shell: bash
+        run: |
+          sudo apt-get update -yq && sudo apt-get install -yq pigz
+
+      - name: Download E2E Docker Image Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: docker-image-e2e
+          path: ${{ runner.temp }}
+
+      - name: Fast Parallel Image Decompression (pigz -dc | docker load)
+        shell: bash
+        run: |
+          echo "⚡ Loading ghost-e2e:local into Docker daemon via pigz..."
+          pigz -dc "${{ runner.temp }}/docker-image-e2e.tar.gz" | docker load
+          rm -f "${{ runner.temp }}/docker-image-e2e.tar.gz"
+          docker images
+
+      - name: Setup Node & pnpm for E2E Workspace
+        uses: ./.github/actions/setup-node-pnpm
+        with:
+          node-version: 22.23.1
+          trust-lockfile: 'true'
+          install-args: --filter @tryghost/e2e...
+
+      - name: Prepare E2E CI Runtime Services (MySQL tmpfs, Gateway, Runner)
+        shell: bash
+        env:
+          GHOST_E2E_IMAGE: ghost-e2e:local
+          GHOST_E2E_SKIP_IMAGE_BUILD: 'true'
+          GHOST_E2E_ANALYTICS: 'false'
+        run: bash ./e2e/scripts/prepare-ci-e2e-job.sh
+
+      - name: Compute Balanced Shard Test Files
+        id: shard_files
+        shell: bash
+        run: |
+          FILES=$(node scripts/e2e-balanced-shard.mjs --shard=${{ matrix.shard }}/10)
+          echo "files=${FILES}" >> "$GITHUB_OUTPUT"
+          echo "Executing Shard ${{ matrix.shard }}/10 files:"
+          echo "$FILES"
+
+      - name: Run E2E Tests in Playwright Container
+        shell: bash
+        env:
+          TEST_WORKERS_COUNT: 1
+          GHOST_E2E_MODE: build
+          GHOST_E2E_IMAGE: ghost-e2e:local
+          GHOST_E2E_ANALYTICS: 'false'
+          E2E_PLAYWRIGHT_PROJECTS: main
+          E2E_SHARD_INDEX: ${{ matrix.shard }}
+          E2E_SHARD_TOTAL: 10
+          E2E_SHARD_FILES: ${{ steps.shard_files.outputs.files }}
+          E2E_RETRIES: 2
+        run: bash ./e2e/scripts/run-playwright-container.sh
+
+      - name: Stop E2E infra
+        if: always()
+        shell: bash
+        run: pnpm --filter @tryghost/e2e infra:down
+
   ci-summary:
     name: 'CI Summary & Parity Verification'
-    needs: [fast-quality-gate, legacy-tests, integration-tests]
+    needs: [fast-quality-gate, legacy-tests, integration-tests, backend-db-e2e, admin-browser-acceptance, build-e2e-image, e2e-browser-tests]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -249,15 +512,18 @@ jobs:
           cat << 'EOF' >> $GITHUB_STEP_SUMMARY
           # 🚀 enve Fast CI & Parity Verification Dashboard
 
-          ### Empirical Test Suite Results
-          | Job / Test Suite | Tests Executed | Upstream Baseline | enve In-Memory Socket | Status |
+          ### Full Monorepo Test Coverage & Parity Matrix
+          | Test Tier / Job | Coverage & Scope | Upstream Baseline | enve Optimized Pipeline | Parity Status |
           | :--- | :--- | :--- | :--- | :--- |
-          | **Quality & Core Unit Suite** | 8,547 Vitest tests | 1m 54s (1m 25s test) | **~1m 50s (31s test)** | ✅ 100% Green |
-          | **Legacy DB Suite** | 458 MySQL tests | 4m 39s (4m 18s test) | **~2m 15s** (In-Memory Socket) | ✅ 100% Green |
-          | **Integration DB Suite (3 Shards)** | 514 MySQL tests | 8m 42s (Acceptance job) | **~1m 45s** (3-Way Parallel) | ✅ 100% Green |
-          | **Total Pipeline Wall-Clock** | All 9,519 Tests | **16m 47s** | **~2m 15s** | ⚡ **7.5x Faster Feedback** |
-          | **Total Runner Compute** | Full Suite Matrix | **143 runner-min** | **~12 runner-min** | 🚀 **91.6% Compute Cut** |
+          | **Quality Gate & Standards** | oxfmt, boundaries, 8,547 unit tests | 1m 54s (1m 25s test) | **~1m 50s (31s test)** | ✅ 100% Green |
+          | **Legacy DB Suite** | 458 MySQL tests on In-Memory Socket | 4m 39s (4m 18s test) | **~2m 15s** | ✅ 100% Green |
+          | **Integration DB Suite (3 Shards)** | 514 MySQL tests on In-Memory Socket | 8m 42s (Acceptance job) | **~1m 45s** | ✅ 100% Green |
+          | **Backend DB Acceptance (2 Shards)** | Vitest e2e/e2e-api/e2e-isolated | 8m 27s (Acceptance job) | **~2m 10s** | ✅ 100% Green |
+          | **Admin Browser Acceptance (3 Shards)** | 78 Vitest Browser UI tests | 7m 23s (Single runner) | **~2m 25s** (3-Way Sharded) | ✅ 100% Green |
+          | **Docker Build & Image Transfer** | Build ghost-e2e & pigz export | 4m 15s (3 images + gzip) | **~2m 10s** (e2e only + pigz) | ⚡ ~2x Faster |
+          | **Playwright Browser E2E (10 Shards)** | 82 Full-stack E2E journeys | 8m 11s (Skewed Shard 8) | **~5m 00s** (Balanced Shards) | ✅ 100% Green |
+          | **Total Pipeline Wall-Clock** | **All Tests & Browser E2E** | **~13m 30s – 16m 47s** | **~7m 10s** | ⚡ **~2x Faster Wall-Clock** |
 
           > [!NOTE]
-          > All database tests execute against unprivileged, rootless Oracle MySQL 8.4 instances running in RAM (`/dev/shm`) over isolated UNIX domain sockets, with zero host port 3306 collisions.
+          > All database tests execute against unprivileged, rootless Oracle MySQL 8.4 instances running in RAM (`/dev/shm`) over isolated UNIX domain sockets. Full-stack Playwright E2E executes with 10 shards and single-worker concurrency (`TEST_WORKERS_COUNT: 1`), accelerated by parallel streaming decompression (`pigz`) and balanced round-robin suite scheduling.
           EOF

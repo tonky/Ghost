@@ -207,4 +207,25 @@ test-legacy *args: db-up build-assets
 test-all: db-up build-assets
     {{ DB_ENV }} pnpm --filter ghost test:all
 
+# Build Ghost Admin Vite/Ember client assets
+build-admin:
+    pnpm nx run @tryghost/admin:build
 
+# Build E2E public app UMD bundles (portal, comments, search, signup, etc.)
+build-e2e-apps:
+    pnpm --filter @tryghost/e2e build:apps
+
+# Concurrently build admin client and public apps
+build-admin-and-apps:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    pnpm nx run @tryghost/admin:build &
+    pid_admin=$!
+    pnpm --filter @tryghost/e2e build:apps &
+    pid_apps=$!
+    wait $pid_admin
+    wait $pid_apps
+
+# Run Ghost Admin Vitest browser acceptance tests (Playwright provider)
+test-admin-acceptance *args:
+    pnpm --filter @tryghost/admin test:acceptance {{ args }}
