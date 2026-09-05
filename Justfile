@@ -20,6 +20,7 @@ DB_USER := "root"
 DB_PASS := "root"
 DB_NAME := "ghost_dev"
 DB_CHARSET := "utf8mb4"
+DB_DATADIR := env_var_or_default("MYSQL_DATADIR", invocation_directory() / ".enve/data/mysql")
 
 # DB environment injection prefix for recipes requiring MySQL database
 DB_ENV := "database__client=" + DB_CLIENT + " database__connection__socketPath=" + DB_SOCKET + " database__connection__user=" + DB_USER + " database__connection__password=" + DB_PASS + " database__connection__database=" + DB_NAME + " database__connection__charset=" + DB_CHARSET
@@ -36,10 +37,10 @@ default:
 db-init:
     #!/usr/bin/env bash
     set -euo pipefail
-    if [ ! -d ".enve/data/mysql/mysql" ]; then
-        echo "📦 Initializing clean rootless MySQL 8 database..."
-        mkdir -p .enve/data/mysql .enve/run
-        mysqld --no-defaults --initialize-insecure --datadir="{{ invocation_directory() }}/.enve/data/mysql"
+    if [ ! -d "{{ DB_DATADIR }}/mysql" ]; then
+        echo "📦 Initializing clean rootless MySQL 8 database in {{ DB_DATADIR }}..."
+        mkdir -p "{{ DB_DATADIR }}" .enve/run
+        mysqld --no-defaults --initialize-insecure --datadir="{{ DB_DATADIR }}"
     fi
 
 # Boot rootless background services (MySQL 8, Redis 7, Mailpit)
@@ -49,7 +50,7 @@ db-up: db-init
     if [ ! -S "{{ DB_SOCKET }}" ] || ! mysqladmin -u root -proot --socket="{{ DB_SOCKET }}" ping >/dev/null 2>&1; then
         echo "🚀 Launching rootless MySQL over UNIX domain socket..."
         rm -f "{{ DB_SOCKET }}" "{{ DB_SOCKET }}.lock"
-        setsid mysqld --no-defaults --datadir="{{ invocation_directory() }}/.enve/data/mysql" --socket="{{ DB_SOCKET }}" --skip-networking --mysqlx=0 > .enve/run/mysqld.log 2>&1 < /dev/null &
+        setsid mysqld --no-defaults --datadir="{{ DB_DATADIR }}" --socket="{{ DB_SOCKET }}" --skip-networking --mysqlx=0 --innodb-flush-log-at-trx_commit=0 --innodb-buffer-pool-size=512M --innodb-log-buffer-size=64M > .enve/run/mysqld.log 2>&1 < /dev/null &
         for i in $(seq 1 30); do
             if mysqladmin --socket="{{ DB_SOCKET }}" ping >/dev/null 2>&1 || mysqladmin -u root -proot --socket="{{ DB_SOCKET }}" ping >/dev/null 2>&1; then
                 break
