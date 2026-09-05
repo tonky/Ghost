@@ -36,7 +36,7 @@ devEnv: schema.#DevEnvironment & {
 	]
 	services: {
 		mysql: schema.#Service & {
-			command: "mysqld --datadir=.enve/data/mysql --socket=.enve/run/mysql.sock --skip-networking --mysqlx=0"
+			command: "mysqld --no-defaults --datadir=.enve/data/mysql --socket=.enve/run/mysql.sock --skip-networking --mysqlx=0"
 			readinessProbe: {
 				command:   "mysqladmin --socket=.enve/run/mysql.sock ping"
 				timeoutMs: 5000

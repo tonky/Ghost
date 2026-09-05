@@ -33,7 +33,7 @@ db-init:
     if [ ! -d ".enve/data/mysql/mysql" ]; then
         echo "📦 Initializing clean rootless MySQL 8 database..."
         mkdir -p .enve/data/mysql .enve/run
-        mysqld --initialize-insecure --datadir="{{ invocation_directory() }}/.enve/data/mysql"
+        mysqld --no-defaults --initialize-insecure --datadir="{{ invocation_directory() }}/.enve/data/mysql"
     fi
 
 # Boot rootless background services (MySQL 8, Redis 7, Mailpit)
@@ -41,7 +41,7 @@ db-up: db-init
     @if [ ! -S "{{ DB_SOCKET }}" ] || ! mysqladmin -u root -proot --socket="{{ DB_SOCKET }}" ping >/dev/null 2>&1; then \
         echo "🚀 Launching rootless MySQL over UNIX domain socket..."; \
         rm -f "{{ DB_SOCKET }}" "{{ DB_SOCKET }}.lock"; \
-        mysqld --datadir="{{ invocation_directory() }}/.enve/data/mysql" --socket="{{ DB_SOCKET }}" --skip-networking --mysqlx=0 > .enve/run/mysqld.log 2>&1 & \
+        mysqld --no-defaults --datadir="{{ invocation_directory() }}/.enve/data/mysql" --socket="{{ DB_SOCKET }}" --skip-networking --mysqlx=0 > .enve/run/mysqld.log 2>&1 & \
         for i in $$(seq 1 30); do \
             if mysqladmin --socket="{{ DB_SOCKET }}" ping >/dev/null 2>&1 || mysqladmin -u root -proot --socket="{{ DB_SOCKET }}" ping >/dev/null 2>&1; then \
                 break; \
@@ -161,7 +161,7 @@ test-integration: db-init
     set -euo pipefail
     mkdir -p .enve/run .enve/data/mysql
     rm -f "{{ DB_SOCKET }}" "{{ DB_SOCKET }}.lock"
-    mysqld --datadir="{{ invocation_directory() }}/.enve/data/mysql" --socket="{{ DB_SOCKET }}" --skip-networking --mysqlx=0 > .enve/run/mysqld.log 2>&1 &
+    mysqld --no-defaults --datadir="{{ invocation_directory() }}/.enve/data/mysql" --socket="{{ DB_SOCKET }}" --skip-networking --mysqlx=0 > .enve/run/mysqld.log 2>&1 &
     MYSQL_PID=$!
     trap 'kill $MYSQL_PID 2>/dev/null || true; rm -f "{{ DB_SOCKET }}" "{{ DB_SOCKET }}.lock"' EXIT
     for i in $(seq 1 30); do
