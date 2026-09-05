@@ -85,7 +85,7 @@ function main() {
 
   // Distribute normal files in reverse round-robin to balance total weight
   normal.forEach((file, idx) => {
-    buckets[(shardTotal - 1 - (idx % shardTotal))].push(file);
+    buckets[shardTotal - 1 - (idx % shardTotal)].push(file);
   });
 
   const selectedFiles = buckets[shardIndex - 1] || [];

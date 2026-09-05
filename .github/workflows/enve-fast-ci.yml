@@ -302,63 +302,20 @@ jobs:
           submodules: recursive
           fetch-depth: 50
 
-      - name: Initialize Nix Store Directory
-        shell: bash
-        run: |
-          sudo mkdir -p /nix/store
-          sudo chown -R $(whoami) /nix
-
-      - name: Restore Nix Store Closures (L1 Cache)
-        uses: actions/cache/restore@v4
-        id: nix-store-cache
+      - name: Setup Node & pnpm
+        uses: ./.github/actions/setup-node-pnpm
         with:
-          path: /nix/store
-          key: nix-store-ghost-${{ runner.os }}-${{ hashFiles('enve.lock') }}
-          restore-keys: |
-            nix-store-ghost-${{ runner.os }}-
-            nix-store-${{ runner.os }}-
+          node-version: 22.23.1
+          trust-lockfile: 'true'
+          install-args: --filter @tryghost/admin...
 
-      - name: Install hermetic enve binary from private cache
-        shell: bash
-        run: |
-          scripts/fetch_enve.sh /usr/local/bin/enve
-          enve --version
-
-      - name: Synchronize Pre-built Closures (L1 / L2 Zero-Egress R2)
-        shell: bash
-        run: |
-          enve cache pull enve.lock -j 4 --cache "${CLOUDFLARE_BUCKET}" --trusted-public-key "${ENVE_CACHE_PUBLIC_KEY}" || true
-
-      - name: Restore pnpm package cache
-        uses: actions/cache@v4
-        with:
-          path: ~/.local/share/pnpm/store
-          key: pnpm-store-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
-          restore-keys: |
-            pnpm-store-${{ runner.os }}-
-
-      - name: Hydrate Monorepo Workspace Dependencies
-        shell: bash
-        run: |
-          enve run -- pnpm install --frozen-lockfile
-
-      - name: Cache Playwright Chromium Binary
-        uses: actions/cache@v4
-        id: playwright-cache
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-chromium-${{ runner.os }}-v1
-
-      - name: Install Playwright Chromium (Headless)
-        if: steps.playwright-cache.outputs.cache-hit != 'true'
-        shell: bash
-        run: |
-          enve run -- pnpm exec playwright install chromium
+      - name: Setup Playwright
+        uses: ./.github/actions/setup-playwright
 
       - name: Ghost Admin Vitest Browser Acceptance Tests (Shard ${{ matrix.shard }}/3)
         shell: bash
         run: |
-          enve run -- just test-admin-acceptance --shard=${{ matrix.shard }}/3
+          pnpm nx run @tryghost/admin:test:acceptance --shard=${{ matrix.shard }}/3
 
   build-e2e-image:
     name: 'Build Ghost E2E Docker Image (Fast pigz)'
@@ -385,7 +342,12 @@ jobs:
       - name: Concurrently Build Admin and E2E Public Apps
         shell: bash
         run: |
-          just build-admin-and-apps
+          pnpm nx run @tryghost/admin:build &
+          pid_admin=$!
+          pnpm --filter @tryghost/e2e build:apps &
+          pid_apps=$!
+          wait $pid_admin
+          wait $pid_apps
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -502,7 +464,16 @@ jobs:
 
   ci-summary:
     name: 'CI Summary & Parity Verification'
-    needs: [fast-quality-gate, legacy-tests, integration-tests, backend-db-e2e, admin-browser-acceptance, build-e2e-image, e2e-browser-tests]
+    needs:
+      [
+        fast-quality-gate,
+        legacy-tests,
+        integration-tests,
+        backend-db-e2e,
+        admin-browser-acceptance,
+        build-e2e-image,
+        e2e-browser-tests,
+      ]
     if: always()
     runs-on: ubuntu-latest
     steps:
