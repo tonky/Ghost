@@ -28,10 +28,12 @@ default:
 
 # Initialize local MySQL database storage if not already present
 db-init:
-    @if [ ! -d ".enve/data/mysql/mysql" ]; then \
-        echo "📦 Initializing clean rootless MySQL 8 database..."; \
-        mkdir -p .enve/data/mysql .enve/run; \
-        mysqld --initialize-insecure --datadir="{{ invocation_directory() }}/.enve/data/mysql" >/dev/null 2>&1; \
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ ! -d ".enve/data/mysql/mysql" ]; then
+        echo "📦 Initializing clean rootless MySQL 8 database..."
+        mkdir -p .enve/data/mysql .enve/run
+        mysqld --initialize-insecure --datadir="{{ invocation_directory() }}/.enve/data/mysql"
     fi
 
 # Boot rootless background services (MySQL 8, Redis 7, Mailpit)
