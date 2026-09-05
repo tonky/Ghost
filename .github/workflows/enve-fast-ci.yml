@@ -342,9 +342,11 @@ jobs:
         shell: bash
         env:
           NODE_ENV: production
+          NX_TUI: 'false'
+          CI: 'true'
         run: |
-          pnpm nx run @tryghost/admin:build
-          pnpm --filter @tryghost/e2e build:apps
+          pnpm nx run @tryghost/admin:build --skip-nx-cache
+          pnpm --filter @tryghost/e2e build:apps --skip-nx-cache
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -386,6 +388,12 @@ jobs:
           docker run --rm ghost-e2e:local ls -la /home/ghost/content/files/portal
           docker run --rm ghost-e2e:local ls -la /home/ghost/content/files/announcement-bar
           docker run --rm ghost-e2e:local ls -la /home/ghost/core/built/admin
+          echo "Verifying zero jsxDEV or dev runtime in built admin..."
+          if docker run --rm ghost-e2e:local grep -rn "jsxDEV" /home/ghost/core/built/admin; then
+            echo "❌ ERROR: jsxDEV found in built admin assets! Failing build." >&2
+            exit 1
+          fi
+          echo "✅ Clean production admin assets verified."
 
       - name: Fast Multi-Threaded Image Compression (pigz -1)
         shell: bash
