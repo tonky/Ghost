@@ -10,8 +10,9 @@
 export FORCE_COLOR := "1"
 export DISABLE_V8_COMPILE_CACHE := "1"
 export NX_NATIVE_COMMAND_RUNNER := "false"
+export NX_TUI := "false"
+export CI := "true"
 export TZ := "America/New_York"
-export NODE_OPTIONS := "--conditions=source"
 
 # Explicit configuration for rootless MySQL over UNIX domain socket
 DB_CLIENT := "mysql2"
@@ -23,7 +24,7 @@ DB_CHARSET := "utf8mb4"
 DB_DATADIR := env_var_or_default("MYSQL_DATADIR", invocation_directory() / ".enve/data/mysql")
 
 # DB environment injection prefix for recipes requiring MySQL database
-DB_ENV := "database__client=" + DB_CLIENT + " database__connection__socketPath=" + DB_SOCKET + " database__connection__user=" + DB_USER + " database__connection__password=" + DB_PASS + " database__connection__database=" + DB_NAME + " database__connection__charset=" + DB_CHARSET
+DB_ENV := "NODE_OPTIONS=--conditions=source database__client=" + DB_CLIENT + " database__connection__socketPath=" + DB_SOCKET + " database__connection__user=" + DB_USER + " database__connection__password=" + DB_PASS + " database__connection__database=" + DB_NAME + " database__connection__charset=" + DB_CHARSET
 
 # Display all available recipes and descriptions
 default:
@@ -173,11 +174,11 @@ build-assets:
 
 # Run Ghost Core server unit tests (vitest run - 8,500+ tests in ~25s)
 test-unit: build-assets
-    pnpm --filter ghost test:unit
+    NODE_OPTIONS="--conditions=source" pnpm --filter ghost test:unit
 
 # Run monorepo unit tests across all 35 packages (parity: pnpm test:unit)
 test-unit-all:
-    pnpm test:unit
+    NODE_OPTIONS="--conditions=source" pnpm test:unit
 
 # Run TypeScript typechecks across the monorepo (parity: pnpm test:types)
 test-types:
@@ -209,22 +210,16 @@ test-all: db-up build-assets
 
 # Build Ghost Admin Vite/Ember client assets
 build-admin:
-    pnpm nx run @tryghost/admin:build
+    NODE_ENV=production pnpm nx run @tryghost/admin:build
 
 # Build E2E public app UMD bundles (portal, comments, search, signup, etc.)
 build-e2e-apps:
-    pnpm --filter @tryghost/e2e build:apps
+    NODE_ENV=production pnpm --filter @tryghost/e2e build:apps
 
 # Concurrently build admin client and public apps
 build-admin-and-apps:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    pnpm nx run @tryghost/admin:build &
-    pid_admin=$!
-    pnpm --filter @tryghost/e2e build:apps &
-    pid_apps=$!
-    wait $pid_admin
-    wait $pid_apps
+    NODE_ENV=production pnpm nx run @tryghost/admin:build
+    NODE_ENV=production pnpm --filter @tryghost/e2e build:apps
 
 # Run Ghost Admin Vitest browser acceptance tests (Playwright provider)
 test-admin-acceptance *args:
