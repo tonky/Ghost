@@ -1,20 +1,26 @@
-# Declarative Developer Experience & Fast CI for Ghost Monorepo
+# Declarative Developer Experience for Ghost Monorepo
 
-**Accelerating Ghost's Engineering Velocity with Rootless User-Space Services & Hermetic Two-Tier Caching**
+**Accelerating Ghost's Engineering Velocity with Rootless User-Space Services & Hermetic Workflows**
 
 ---
 
 ## Executive Summary
 
-Ghost (`TryGhost/Ghost`) is a premier open-source publishing platform built on a sophisticated, multi-package Node.js monorepo. As the codebase has expanded, two development friction points have emerged:
+Ghost (`TryGhost/Ghost`) is a premier open-source publishing platform built on a sophisticated, multi-package Node.js monorepo. As the codebase has expanded, local development friction has emerged:
 
-1. **Local Developer Experience (DX)**: Local development currently mandates running Docker Desktop and 5 background containers (Ghost Core, MySQL 8, Redis, Mailpit, Caddy). This setup consumes 3–5 GB of RAM, drains laptop battery, suffers from filesystem bind-mount I/O lag, and frequently fails if host port `3306` is already occupied by another database.
-2. **CI Pipeline Turnaround & Infrastructure Spend**: Ghost's continuous integration workflow (`.github/workflows/ci.yml`) orchestrates 25+ jobs per push, consuming over **110 runner-minutes per run** and taking 12–15 minutes of wall-clock time before developers receive feedback.
+- **Heavy Container Overhead**: Local development currently mandates running Docker Desktop and background containers (Ghost Core, MySQL 8, Redis, Mailpit, Caddy). This setup consumes 3–5 GB of RAM, drains laptop battery, and suffers from filesystem bind-mount virtualization latency.
+- **Port 3306 Conflicts**: Running MySQL in Docker binds to host `0.0.0.0:3306`, immediately colliding and failing if the developer already runs a local MySQL or MariaDB instance.
+- **Toolchain Drift**: Contributor setups frequently fail due to unpinned or incompatible host package manager versions.
 
-This proposal introduces **`enve`** to Ghost, demonstrating:
+This proposal introduces **`enve`** to Ghost, providing:
 
-- **Zero-Docker Local Development**: Native, unprivileged user-space microservices (`bwrap`) communicating over an isolated UNIX domain socket (`.enve/run/mysql.sock`), guaranteeing **zero TCP port 3306 collisions** with existing host databases and delivering sub-second (`< 1s`) database resets.
-- **Fast PR Gatekeeper in CI**: A consolidated quality gate running formatting (`oxfmt`), package standards, 35 unit test suites, and rootless MySQL database integration tests in **under 3.5 minutes**, saving an estimated **~30,000 runner-minutes per month (~38% reduction)**.
+- **Zero-Docker Local Development**: Native, unprivileged user-space microservices (`bwrap`) communicating over an isolated UNIX domain socket (`.enve/run/mysql.sock`), guaranteeing **zero TCP port 3306 collisions** with existing host databases.
+- **Sub-Second Database Operations**: Running database operations directly against local memory/IPC eliminates Docker volume translation lag, executing schema migrations and resets in **~0.9s**.
+- **Hermetic Toolchain Pinning**: Node `22.22.1` and pnpm `12.2.1` pinned via declarative lockfiles, ensuring zero environment drift across contributors.
+- **Instant Pre-Commit Gatekeeper**: Consolidated single-command verification (`enve run -- just check-fast`) running formatting, package checks, 8,547 unit tests, and a DB smoke test in **~19 seconds**.
+
+> [!NOTE]
+> For the accompanying Continuous Integration architecture, parallel sharding, and cloud runner benchmarks, see [**`docs/CI_PERFORMANCE_BENCHMARKS.md`**](CI_PERFORMANCE_BENCHMARKS.md).
 
 ---
 
@@ -53,11 +59,7 @@ Modern enve Setup (Rootless User-Space):
 
 ---
 
-## 2. Empirical Benchmark Comparison: Upstream vs `enve`
-
-We conducted comprehensive, head-to-head empirical benchmarks comparing the official upstream Ghost workflow (`TryGhost/Ghost`) against `enve` on [`tonky/Ghost`](https://github.com/tonky/Ghost) across both **Local Developer Experience (DX)** and **Continuous Integration (CI)**.
-
-### 2.1 Local Developer Experience: Head-to-Head Benchmarks
+## 2. Empirical Local DX Benchmark Comparison: Upstream vs `enve`
 
 All local benchmarks were measured directly on the same Linux host (`x86_64`, AMD Ryzen, NVMe storage) using `hyperfine` and high-resolution process timers.
 
@@ -77,41 +79,7 @@ All local benchmarks were measured directly on the same Linux host (`x86_64`, AM
 
 ---
 
-### 2.2 CI Pipeline Comparison: Exact Test-Suite Parity
-
-To provide an exact apple-to-apple comparison, our GitHub Actions CI pipeline on `tonky/Ghost` executes the **exact same test suites** that upstream Ghost runs in its matrix:
-
-| Metric / Test Suite               | Upstream Ghost CI (`TryGhost/Ghost`)                                                      | Modernized `enve` CI (`tonky/Ghost`)                                                | Delta / Improvement                        |
-| :-------------------------------- | :---------------------------------------------------------------------------------------- | :---------------------------------------------------------------------------------- | :----------------------------------------- |
-| **Verified CI Run**               | [TryGhost/Ghost #31000619992](https://github.com/TryGhost/Ghost/actions/runs/31000619992) | [tonky/Ghost #33961818757](https://github.com/tonky/Ghost/actions/runs/33961818757) | **100% Green Parity**                      |
-| **Quality & Core Unit Suite**     | **1m 54s** (1m 25s test duration)                                                         | **1m 49s** (31s test duration)                                                      | **All 8,547 tests passed**                 |
-| **Legacy Tests (MySQL 8.4)**      | **4m 39s** (4m 18s test duration)                                                         | **4m 04s** (in-memory RAM socket)                                                   | **Faster than upstream** (458 tests green) |
-| **Integration Tests (MySQL 8.4)** | **3m 04s** (2m 38s test) / 8m 42s job                                                     | **2m 29s max** (3 parallel shards: 2m05s, 2m15s, 2m29s)                             | **Faster than upstream** (514 tests green) |
-| **Supply Chain Security**         | Not checked in PR gating                                                                  | `enve shield` automated CVE audit                                                   | Pinned lockfile CVE auditing               |
-| **Total Jobs Spawned**            | **48 jobs** (41 runners)                                                                  | **5 parallel parity jobs + summary**                                                | **88% reduction in runner sprawl**         |
-| **Total Runner Compute**          | **143 runner-minutes**                                                                    | **12 runner-minutes**                                                               | **91.6% reduction in runner compute** ⚡   |
-| **Full Pipeline Wall-Clock**      | **16m 47s**                                                                               | **4m 04s**                                                                          | **4.1x faster full verification** 🚀       |
-| **Fast PR Gatekeeper Mode**       | Not available (16m 47s wall-clock)                                                        | **1m 49s wall-clock** (`check-fast`)                                                | **9.2x faster turnaround for PRs** ⚡      |
-
----
-
-## 3. Financial & Operational ROI Analysis
-
-### Upstream CI Annual Baseline
-
-- **Run Frequency**: ~35 runs/day (~1,050 runs/month) across PRs and main commits.
-- **Compute Volume**: 143 runner-minutes × 1,050 runs = **~150,000 runner-minutes / month**.
-- **Estimated Cloud Spend**: **\$15,000 – \$22,000 / year** on GitHub Actions and Blacksmith runner compute.
-
-### Annual Savings with `enve`
-
-- **Runner Compute Saved**: Slashing per-run compute from 143 runner-minutes to 14 runner-minutes (or 2 runner-minutes for fast PR gates) saves **~135,000 runner-minutes/month (~90% reduction)**.
-- **Direct Cloud Bill Reduction**: **\$12,000 – \$18,000 / year** saved on GitHub Actions runner minutes.
-- **Developer Productivity Unlocked**: Core developers wait **~2 minutes instead of 17 minutes** for initial PR feedback. Across 25 engineers, this recovers **~220 engineering hours per month**, valued at **~$195,000 / year** in recaptured engineering velocity.
-
----
-
-## 4. Contributor Quickstart Guide
+## 3. Contributor Quickstart Guide
 
 ### Prerequisites
 
