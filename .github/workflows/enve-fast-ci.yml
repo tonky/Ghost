@@ -338,15 +338,49 @@ jobs:
           node-version: 22.23.1
           trust-lockfile: 'true'
 
+      - name: Cache Admin Built Assets
+        id: cache-admin
+        uses: actions/cache@v4
+        with:
+          path: |
+            ghost/core/core/built/admin
+            apps/admin/dist
+          key: admin-built-${{ runner.os }}-${{ hashFiles('apps/admin/**', 'apps/ember-admin/**', 'apps/shade/**', 'apps/admin-x-*/**', 'pnpm-lock.yaml') }}
+
+      - name: Cache Public App UMD Bundles
+        id: cache-public-apps
+        uses: actions/cache@v4
+        with:
+          path: |
+            apps/portal/umd
+            apps/comments-ui/umd
+            apps/sodo-search/umd
+            apps/signup-form/umd
+            apps/announcement-bar/umd
+            apps/admin-toolbar/umd
+          key: public-apps-umd-${{ runner.os }}-${{ hashFiles('apps/portal/**', 'apps/comments-ui/**', 'apps/sodo-search/**', 'apps/signup-form/**', 'apps/announcement-bar/**', 'apps/admin-toolbar/**', 'pnpm-lock.yaml') }}
+
       - name: Build Admin and E2E Public Apps
+        if: steps.cache-admin.outputs.cache-hit != 'true' || steps.cache-public-apps.outputs.cache-hit != 'true'
         shell: bash
         env:
           NODE_ENV: production
           NX_TUI: 'false'
           CI: 'true'
         run: |
-          pnpm nx run @tryghost/admin:build --skip-nx-cache
-          pnpm --filter @tryghost/e2e build:apps --skip-nx-cache
+          if [ "${{ steps.cache-admin.outputs.cache-hit }}" != "true" ]; then
+            echo "📦 Admin cache miss — compiling Admin from source..."
+            pnpm nx run @tryghost/admin:build --skip-nx-cache
+          else
+            echo "✅ Admin assets restored from cache."
+          fi
+
+          if [ "${{ steps.cache-public-apps.outputs.cache-hit }}" != "true" ]; then
+            echo "📦 Public Apps cache miss — building public apps..."
+            pnpm --filter @tryghost/e2e build:apps --skip-nx-cache
+          else
+            echo "✅ Public app UMD bundles restored from cache."
+          fi
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3

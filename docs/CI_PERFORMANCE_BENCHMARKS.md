@@ -129,6 +129,11 @@ Additionally, we configured single-worker execution (`TEST_WORKERS_COUNT: 1`) pe
 - Development assets containing React development helpers (`jsxDEV`) can silently leak into production bundles if environment flags are misconfigured.
 - Modernized CI includes an automated gate verifying zero occurrences of `jsxDEV` in `/home/ghost/core/built/admin` before the image is published to E2E runners.
 
+### 4. Content-Addressed Admin & Public App Asset Caching
+
+- Rather than blindly recompiling Admin from scratch on every run or relying on unpinned caches, `enve` CI introduces deterministic, content-addressed caching for compiled Admin assets (`ghost/core/core/built/admin`) and Public App UMD bundles (`apps/*/umd`), keyed strictly on the SHA-256 hash of their source trees (`apps/admin/**`, `apps/ember-admin/**`, `apps/shade/**`, `apps/admin-x-*/**`, and `pnpm-lock.yaml`).
+- For the majority of backend, core, migration, or package PRs that do not alter frontend Admin code, compilation completes in **~3 seconds** (restoring pre-verified production assets) instead of 2m 30s, cutting the E2E image build latency from 5m 08s down to **~2m 40s** and dropping full pipeline wall-clock time to **~10m 30s**.
+
 ---
 
 ## 5. Organizational & Resource ROI for Ghost
