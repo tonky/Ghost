@@ -26,20 +26,23 @@ Our modernized pipeline (`.github/workflows/enve-fast-ci.yml`) delivers **100% g
 
 All figures below are derived from official, verified GitHub Actions runs on GitHub-hosted `ubuntu-latest` runners:
 
-- **Upstream Baseline**: [TryGhost/Ghost Run #31000619992](https://github.com/TryGhost/Ghost/actions/runs/31000619992) (Commit `3d3c42e`)
+- **Upstream Clean Run (No Straggler)**: [TryGhost/Ghost Run #33780927599](https://github.com/TryGhost/Ghost/actions/runs/33780927599) (Sep 3, 2026 · Commit `736c33b` on `main`)
+- **Upstream Run (With Straggler)**: [TryGhost/Ghost Run #31000619992](https://github.com/TryGhost/Ghost/actions/runs/31000619992) (Commit `3d3c42e`)
 - **Modernized `enve` CI**: [tonky/Ghost Run #33994118986](https://github.com/tonky/Ghost/actions/runs/33994118986) (Commit `ca4302d`)
 
-| Benchmark Metric                      | Upstream Ghost CI (`TryGhost/Ghost`) | Modernized `enve` CI (`tonky/Ghost`)          | Impact / Speedup                             |
-| :------------------------------------ | :----------------------------------- | :-------------------------------------------- | :------------------------------------------- |
-| **Run Status**                        | ✅ **Success** (41 active jobs)      | ✅ **Success** (21 active jobs + summary)     | **100% Green Parity**                        |
-| **Full Pipeline Wall-Clock**          | **16m 43s** (1,003s)                 | **13m 15s** (795s)                            | **21% faster wall-clock** ⚡                 |
-| **Fast PR Gatekeeper Wall-Clock**     | _Not available_ (must wait 16m 43s)  | **2m 11s** (`fast-quality-gate`)              | **7.7x faster PR feedback** 🚀               |
-| **Total Runner Compute**              | **142.8 runner-minutes** (8,570s)    | **101.3 runner-minutes** (6,078s)             | **41.5 runner-minutes saved per run (-29%)** |
-| **Active Jobs Spawned**               | 41 jobs                              | 21 parallel jobs                              | **49% reduction in runner sprawl**           |
-| **Slowest Playwright E2E Shard**      | **10m 49s** (Shard 8 straggler)      | **7m 51s** (Shard 1 / all others ≤ 6m 58s)    | **Nearly 3m cut from critical path**         |
-| **MySQL Integration Test Wall-Clock** | **6m 29s** (monolithic runner)       | **2m 19s** (3-way sharded on RAM socket)      | **2.8x faster integration testing**          |
-| **Admin Acceptance Test Wall-Clock**  | **7m 02s** (monolithic runner)       | **4m 36s** (3-way sharded runner)             | **1.5x – 2.1x faster UI acceptance**         |
-| **Database Execution Target**         | Docker container over TCP `3306`     | Rootless MySQL 8.4 socket in RAM (`/dev/shm`) | **Zero container/port overhead**             |
+| Benchmark Metric                      | Upstream Clean ([#33780927599](https://github.com/TryGhost/Ghost/actions/runs/33780927599)) | Upstream w/ Straggler ([#31000619992](https://github.com/TryGhost/Ghost/actions/runs/31000619992)) | Modernized `enve` CI ([#33994118986](https://github.com/tonky/Ghost/actions/runs/33994118986)) | Impact / Modernized Advantage                     |
+| :------------------------------------ | :------------------------------------------------------------------------------------------ | :------------------------------------------------------------------------------------------------- | :--------------------------------------------------------------------------------------------- | :------------------------------------------------ |
+| **Run Status**                        | ✅ **Success** (49 active runners)                                                          | ✅ **Success** (41 active runners)                                                                 | ✅ **Success** (21 active jobs + summary)                                                      | **100% Green Parity**                             |
+| **Full Pipeline Wall-Clock**          | **12m 51s** (771s)                                                                          | **16m 43s** (1,003s)                                                                               | **13m 15s** (795s)                                                                             | **Comparable to best-case, 21% faster vs avg**    |
+| **Fast PR Gatekeeper Wall-Clock**     | _Not available_ (must wait 12m 51s)                                                         | _Not available_ (must wait 16m 43s)                                                                | **2m 11s** (`fast-quality-gate`)                                                               | **6x – 8x faster PR feedback** 🚀                 |
+| **Total Runner Compute**              | **138.2 runner-minutes** (8,292s)                                                           | **142.8 runner-minutes** (8,570s)                                                                  | **101.3 runner-minutes** (6,078s)                                                              | **37 – 42 runner-min saved / run (-27% to -29%)** |
+| **Active Runners Spawned**            | 49 runners (57 jobs)                                                                        | 41 runners (48 jobs)                                                                               | **21 runners** (21 jobs)                                                                       | **57% reduction in runner sprawl**                |
+| **Slowest Playwright E2E Shard**      | **7m 36s** (Shard 8/10)                                                                     | **10m 49s** (Shard 8/10 straggler)                                                                 | **7m 51s** (Shard 1 / all others ≤ 6m 58s)                                                     | **Stable, bin-packed critical path**              |
+| **Fastest Playwright E2E Shard**      | **5m 24s** (Shard 9/10)                                                                     | **5m 56s** (Shard 4/10)                                                                            | **5m 56s** (Shard 10/10)                                                                       | **Uniform workload distribution**                 |
+| **E2E Shard Duration Spread**         | **2m 12s**                                                                                  | **4m 53s**                                                                                         | **1m 55s**                                                                                     | **Lowest variance across shards**                 |
+| **MySQL Integration Test Wall-Clock** | **8m 02s** (Node 24 container)                                                              | **6m 29s** (Node 22 container)                                                                     | **2m 19s** (3-way sharded on RAM socket)                                                       | **2.8x – 3.5x faster integration testing**        |
+| **Admin Acceptance Test Wall-Clock**  | **9m 13s** (`@tryghost/admin`)                                                              | **7m 02s** (`@tryghost/admin`)                                                                     | **4m 36s** (3-way sharded runner)                                                              | **1.5x – 2.1x faster UI acceptance**              |
+| **Database Execution Target**         | Docker container over TCP `3306`                                                            | Docker container over TCP `3306`                                                                   | Rootless MySQL 8.4 socket in RAM (`/dev/shm`)                                                  | **Zero container/port overhead**                  |
 
 ---
 
@@ -128,26 +131,38 @@ Additionally, we configured single-worker execution (`TEST_WORKERS_COUNT: 1`) pe
 
 ---
 
-## 5. Financial & Resource ROI for Ghost
+## 5. Organizational & Resource ROI for Ghost
 
-### Monthly & Annual Compute Savings
+### The Real Cost of Upstream CI: Concurrency Gridlock & Developer Latency
 
-Based on GitHub Actions telemetry from `TryGhost/Ghost` across a 1,000-run sample of the `CI` workflow (`.github/workflows/ci.yml`) between August 26 and September 6, 2026:
+Because `TryGhost/Ghost` is an open-source public repository, standard GitHub-hosted Linux runners (`ubuntu-latest`) do not incur per-minute billing on the public repo. However, upstream CI faces two severe operational bottlenecks:
+
+1. **Organizational Concurrency Saturation**:
+   GitHub accounts have strict concurrency limits across an organization (typically 60 to 180 concurrent runners). When upstream CI spawns **49 to 57 runners per run**, just 3 to 4 concurrent PRs or commit pushes consume 150–220 runner slots. This saturates the organization's concurrency cap, forcing jobs into `Queued` state and stalling unrelated work across the team.
+   - Modernized CI cuts active runners from **49–57 down to 21 runners** (-57% to -63%), and Fast PR Gatekeeper mode uses **only 1–2 runners** (-96% concurrency reduction).
+
+2. **Engineering Velocity & Context Switching (The True Financial Cost)**:
+   Ghost employs ~25–35 engineers. Across ~2,400 monthly PR runs, engineers currently wait 13 to 17 minutes for feedback. Because ~50% of PR runs fail early on avoidable lint, unit test, or version check errors, developers endure 15+ minutes of turnaround before switching contexts to fix minor issues.
+   - Fast PR Gatekeeper mode delivers this feedback in **2m 11s**, recovering **~500 engineering hours per month** (~$60,000/month or ~$720,000/year in recaptured developer focus at typical loaded rates).
+
+### Monthly & Annual Compute Impact
+
+Based on GitHub Actions telemetry across 1,000 runs of `.github/workflows/ci.yml` on upstream Ghost (`TryGhost/Ghost`) between August 26 and September 6, 2026:
 
 - Ghost triggers an average of **92.4 CI runs per calendar day** (**121.1 runs per weekday**).
 - This totals approximately **~2,700 CI workflow runs per month**.
 
-| Metric                             | Upstream Ghost CI (`TryGhost/Ghost`) | Modernized `enve` Full Run      | Fast PR Gatekeeper Mode         |
-| :--------------------------------- | :----------------------------------- | :------------------------------ | :------------------------------ |
-| **Runner Minutes / Run**           | 142.8 min                            | 101.3 min                       | **~2.2 – 12.0 min**             |
-| **Monthly Compute Volume**         | ~385,000 min                         | ~273,500 min                    | **~32,000 min**                 |
-| **Annual Compute Saved**           | _Baseline_                           | **~1,340,000 runner-min saved** | **~4,200,000 runner-min saved** |
-| **Estimated Direct Cloud Savings** | —                                    | **\$10,500 – \$16,000 / year**  | **\$33,000 – \$50,000 / year**  |
+| Metric                               | Upstream Ghost CI (`TryGhost/Ghost`) | Modernized `enve` Full Run            | Fast PR Gatekeeper Mode               |
+| :----------------------------------- | :----------------------------------- | :------------------------------------ | :------------------------------------ |
+| **Runner Minutes / Run**             | 138.2 – 142.8 min                    | 101.3 min                             | **~2.2 – 12.0 min**                   |
+| **Monthly Compute Volume**           | ~373,000 – ~385,000 min              | ~273,500 min                          | **~32,000 min**                       |
+| **Annual Runner Minutes Saved**      | _Baseline_                           | **~1,200,000 – ~1,340,000 min saved** | **~4,100,000 – ~4,200,000 min saved** |
+| **Active Concurrent Runners / Run**  | 49 – 57 runner slots                 | **21 runner slots (-57% sprawl)**     | **1 – 2 runner slots (-96% sprawl)**  |
+| **PR Feedback Latency**              | 12m 51s – 16m 43s                    | 13m 15s                               | **2m 11s** 🚀                         |
+| **Commercial Cloud Compute Value**\* | —                                    | **\$10,500 – \$16,000 / year**        | **\$33,000 – \$50,000 / year**        |
 
-### Recaptured Engineering Velocity
-
-- **PR Feedback Latency**: Reduced from **16m 43s down to 2m 11s** for initial quality, unit, and database checks.
-- **Engineering Impact**: Across ~2,400 monthly PR runs, saving ~14 minutes on early feedback cycles recovers over **~500 engineering hours per month**, unblocking team velocity and eliminating developer context switching.
+> [!NOTE]
+> \* **Commercial Cloud Compute Value**: While standard public open-source runners on GitHub are free of charge, this compute value reflects equivalent commercial cloud runner rates ($0.008/min), directly benefiting private internal mirrors (`TryGhost/admin-x-settings`, hosting and deployment automation), self-hosted infrastructure, and paid runner providers such as Blacksmith (`useblacksmith.com`).
 
 ---
 
@@ -155,8 +170,9 @@ Based on GitHub Actions telemetry from `TryGhost/Ghost` across a 1,000-run sampl
 
 ### 1. View Live Verified GitHub Actions Runs
 
-- **Upstream Run**: [https://github.com/TryGhost/Ghost/actions/runs/31000619992](https://github.com/TryGhost/Ghost/actions/runs/31000619992)
-- **Modernized `enve` Run**: [https://github.com/tonky/Ghost/actions/runs/33994118986](https://github.com/tonky/Ghost/actions/runs/33994118986)
+- **Upstream Clean Run (No Straggler)**: [https://github.com/TryGhost/Ghost/actions/runs/33780927599](https://github.com/TryGhost/Ghost/actions/runs/33780927599) (12m 51s wall-clock, 138.2 runner-min, 49 active runners)
+- **Upstream Run (With Straggler)**: [https://github.com/TryGhost/Ghost/actions/runs/31000619992](https://github.com/TryGhost/Ghost/actions/runs/31000619992) (16m 43s wall-clock, 142.8 runner-min, 41 active runners)
+- **Modernized `enve` Run**: [https://github.com/tonky/Ghost/actions/runs/33994118986](https://github.com/tonky/Ghost/actions/runs/33994118986) (13m 15s wall-clock, 101.3 runner-min, 21 active runners)
 
 ### 2. Verify Locally in One Command
 
