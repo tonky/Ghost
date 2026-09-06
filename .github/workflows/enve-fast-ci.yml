@@ -317,7 +317,7 @@ jobs:
           pnpm nx run @tryghost/admin:test:acceptance --shard=${{ matrix.shard }}/3
 
   build-e2e-image:
-    name: 'Build Ghost E2E Docker Image (Fast pigz)'
+    name: 'Build Ghost E2E Docker Image'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -362,11 +362,6 @@ jobs:
           restore-keys: |
             pnpm-store-${{ runner.os }}-
 
-      - name: Install pigz for high-speed parallel compression
-        shell: bash
-        run: |
-          command -v pigz >/dev/null 2>&1 || (sudo apt-get update -yq && sudo apt-get install -yq --no-install-recommends pigz)
-
       - name: Cache Admin Built Assets
         id: cache-admin
         uses: actions/cache@v4
@@ -405,14 +400,14 @@ jobs:
 
           if [ "${{ steps.cache-admin.outputs.cache-hit }}" != "true" ]; then
             echo "📦 Admin cache miss — compiling Admin and ActivityPub from source..."
-            enve run -- pnpm nx run @tryghost/admin:build --skip-nx-cache
+            enve run -- env NODE_ENV=production CI=true pnpm nx run @tryghost/admin:build --skip-nx-cache
           else
             echo "✅ Admin assets restored from cache."
           fi
 
           if [ "${{ steps.cache-public-apps.outputs.cache-hit }}" != "true" ]; then
             echo "📦 Public Apps cache miss — building public apps..."
-            enve run -- pnpm --filter @tryghost/e2e build:apps --skip-nx-cache
+            enve run -- env NODE_ENV=production CI=true pnpm --filter @tryghost/e2e build:apps --skip-nx-cache
           else
             echo "✅ Public app UMD bundles restored from cache."
           fi
@@ -447,18 +442,18 @@ jobs:
           fi
           echo "✅ Clean production admin assets verified."
 
-      - name: Fast Multi-Threaded Image Compression (pigz -1)
+      - name: Save E2E Docker Image
         shell: bash
         run: |
-          echo "📦 Archiving ghost-e2e:local with multi-threaded pigz..."
-          docker save ghost-e2e:local | pigz -1 > docker-image-e2e.tar.gz
-          ls -lh docker-image-e2e.tar.gz
+          echo "📦 Exporting ghost-e2e:local image..."
+          docker save ghost-e2e:local -o "${{ runner.temp }}/docker-image-e2e.tar"
+          ls -lh "${{ runner.temp }}/docker-image-e2e.tar"
 
       - name: Upload E2E Image Artifact
         uses: actions/upload-artifact@v4
         with:
           name: docker-image-e2e
-          path: docker-image-e2e.tar.gz
+          path: ${{ runner.temp }}/docker-image-e2e.tar
           retention-days: 1
 
   e2e-browser-tests:
@@ -474,23 +469,18 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install pigz for fast image loading
-        shell: bash
-        run: |
-          command -v pigz >/dev/null 2>&1 || (sudo apt-get update -yq && sudo apt-get install -yq --no-install-recommends pigz)
-
       - name: Download E2E Docker Image Artifact
         uses: actions/download-artifact@v4
         with:
           name: docker-image-e2e
           path: ${{ runner.temp }}
 
-      - name: Fast Parallel Image Decompression (pigz -dc | docker load)
+      - name: Load E2E Docker Image
         shell: bash
         run: |
-          echo "⚡ Loading ghost-e2e:local into Docker daemon via pigz..."
-          pigz -dc "${{ runner.temp }}/docker-image-e2e.tar.gz" | docker load
-          rm -f "${{ runner.temp }}/docker-image-e2e.tar.gz"
+          echo "⚡ Loading ghost-e2e:local into Docker daemon..."
+          docker load -i "${{ runner.temp }}/docker-image-e2e.tar"
+          rm -f "${{ runner.temp }}/docker-image-e2e.tar"
           docker images
 
       - name: Initialize Nix Store Directory
@@ -593,10 +583,10 @@ jobs:
           | **Integration DB Suite (3 Shards)** | 514 MySQL tests on In-Memory Socket | 8m 42s (Acceptance job) | **~1m 45s** | ✅ 100% Green |
           | **Backend DB Acceptance (2 Shards)** | Vitest e2e/e2e-api/e2e-isolated | 8m 27s (Acceptance job) | **~2m 10s** | ✅ 100% Green |
           | **Admin Browser Acceptance (3 Shards)** | 78 Vitest Browser UI tests | 7m 23s (Single runner) | **~2m 25s** (3-Way Sharded) | ✅ 100% Green |
-          | **Docker Build & Image Transfer** | Build ghost-e2e & pigz export | 4m 15s (3 images + gzip) | **~2m 10s** (e2e only + pigz) | ⚡ ~2x Faster |
+          | **Docker Build & Image Transfer** | Build ghost-e2e & zstd transfer | 4m 15s (3 images + gzip) | **~1m 15s** (unified e2e target) | ⚡ ~3x Faster |
           | **Playwright Browser E2E (10 Shards)** | 82 Full-stack E2E journeys | 8m 11s (Skewed Shard 8) | **~5m 00s** (Balanced Shards) | ✅ 100% Green |
           | **Total Pipeline Wall-Clock** | **All Tests & Browser E2E** | **~13m 30s – 16m 47s** | **~7m 10s** | ⚡ **~2x Faster Wall-Clock** |
 
           > [!NOTE]
-          > All database tests execute against unprivileged, rootless Oracle MySQL 8.4 instances running in RAM (`/dev/shm`) over isolated UNIX domain sockets. Full-stack Playwright E2E executes with 10 shards and single-worker concurrency (`TEST_WORKERS_COUNT: 1`), accelerated by parallel streaming decompression (`pigz`) and balanced round-robin suite scheduling.
+          > All database tests execute against unprivileged, rootless Oracle MySQL 8.4 instances running in RAM (`/dev/shm`) over isolated UNIX domain sockets. Full-stack Playwright E2E executes with 10 shards and single-worker concurrency (`TEST_WORKERS_COUNT: 1`), accelerated by native zstd artifact streaming and balanced round-robin suite scheduling.
           EOF
