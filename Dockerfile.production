@@ -143,3 +143,21 @@ FROM core AS full
 # only stage that carries admin. Local `full` builds must populate that path first
 # (e.g. `pnpm nx run @tryghost/admin:build`).
 COPY --chown=nobody:nogroup ghost/core/core/built/admin core/built/admin
+
+# ---- E2E: full + public apps (for E2E browser tests) ----
+FROM full AS e2e
+
+# Public app UMD bundles — Ghost serves these from /content/files/
+COPY --chown=ghost:ghost apps/portal/umd /home/ghost/content/files/portal
+COPY --chown=ghost:ghost apps/comments-ui/umd /home/ghost/content/files/comments-ui
+COPY --chown=ghost:ghost apps/sodo-search/umd /home/ghost/content/files/sodo-search
+COPY --chown=ghost:ghost apps/signup-form/umd /home/ghost/content/files/signup-form
+COPY --chown=ghost:ghost apps/announcement-bar/umd /home/ghost/content/files/announcement-bar
+
+ENV portal__url=/content/files/portal/portal.min.js
+ENV comments__url=/content/files/comments-ui/comments-ui.min.js
+ENV sodoSearch__url=/content/files/sodo-search/sodo-search.min.js
+ENV sodoSearch__styles=/content/files/sodo-search/main.css
+ENV signupForm__url=/content/files/signup-form/signup-form.min.js
+ENV announcementBar__url=/content/files/announcement-bar/announcement-bar.min.js
+

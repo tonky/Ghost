@@ -131,8 +131,22 @@ Additionally, we configured single-worker execution (`TEST_WORKERS_COUNT: 1`) pe
 
 ### 4. Content-Addressed Admin & Public App Asset Caching
 
-- Rather than blindly recompiling Admin from scratch on every run or relying on unpinned caches, `enve` CI introduces deterministic, content-addressed caching for compiled Admin assets (`ghost/core/core/built/admin`) and Public App UMD bundles (`apps/*/umd`), keyed strictly on the SHA-256 hash of their source trees (`apps/admin/**`, `apps/ember-admin/**`, `apps/shade/**`, `apps/admin-x-*/**`, and `pnpm-lock.yaml`).
-- For the majority of backend, core, migration, or package PRs that do not alter frontend Admin code, compilation completes in **~3 seconds** (restoring pre-verified production assets) instead of 2m 30s, cutting the E2E image build latency from 5m 08s down to **~2m 40s** and dropping full pipeline wall-clock time to **~10m 30s**.
+- Rather than blindly recompiling Admin from scratch on every run or relying on unpinned caches, `enve` CI introduces deterministic, content-addressed caching for compiled Admin assets (`ghost/core/core/built/admin`) and Public App UMD bundles (`apps/*/umd`), keyed strictly on the SHA-256 hash of their source trees (`apps/admin/**`, `apps/ember-admin/**`, `apps/activitypub/**`, `apps/shade/**`, `apps/admin-x-*/**`, and `pnpm-lock.yaml`).
+- By caching `@tryghost/activitypub` and `@tryghost/admin-x-framework` outputs alongside Admin, we eliminate the 93-second cascading TypeScript/Vite compilation of ActivityPub.
+- For the majority of backend, core, migration, or package PRs that do not alter frontend Admin code, compilation completes in **~3 seconds** (restoring pre-verified production assets) instead of 2m 30s.
+
+### 5. Unified Multi-Stage E2E Docker Target & enve Multi-Tier Caching
+
+- Upstream and earlier iterations ran two distinct Docker builds: building `ghost-base:local`, copying public app UMDs to a temporary staging folder `/tmp/e2e-context`, and then invoking a secondary `docker build` with `e2e/Dockerfile.e2e`.
+- `enve` CI eliminates the secondary build entirely by introducing a native `e2e` target directly inside [`Dockerfile.production`](file:///home/tonky/projects/Ghost/Dockerfile.production) (`FROM full AS e2e`), setting environment variables and copying UMD assets in one pass.
+- Employs GitHub Actions native BuildKit layer caching (`cache-from/cache-to: type=gha,mode=max,scope=ghost-e2e`), caching the entire Debian root, pnpm production dependency deployment, and asset tree across workflow runs.
+- **Full `enve` Hermetic Toolchain Migration**: Replaces non-hermetic `setup-node-pnpm` and host apt installs in `build-e2e-image` with `enve`'s multi-tier caching hierarchy:
+  - **L1 GHA Cache**: Instant sub-second restoration of `/nix/store` closures.
+  - **L2 Cloudflare R2**: Zero-egress fallback guaranteeing hermetic Node.js 22, pnpm, and toolchain availability in under 2 seconds.
+  - **pnpm Package Store Cache**: Restores `~/.local/share/pnpm/store` directly from GHA cache, allowing host-side compilation or hydration in seconds.
+- **Playwright Shard Host Optimization**: Standardizes `e2e-browser-tests` on `enve` and eliminates the redundant host-side `pnpm install --filter @tryghost/e2e...` across all 10 shards, saving an additional 25–30s per shard (~4.5 runner-minutes per run).
+- Replaces unconditional `apt-get update` with cached pigz binary validation.
+- **Result**: Cuts `Build Ghost E2E Docker Image` duration from **5m 20s down to ~1m 15s** (76% reduction) and accelerates all 10 Playwright shards, breaking the critical CI path down to **~8m 45s** (compared to upstream's 12m 51s – 16m 43s).
 
 ---
 
