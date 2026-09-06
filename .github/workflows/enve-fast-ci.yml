@@ -412,21 +412,19 @@ jobs:
             echo "✅ Public app UMD bundles restored from cache."
           fi
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+      - name: Hydrate Ghost E2E Production Closure
+        shell: bash
+        run: |
+          enve run -- bash scripts/hydrate-ghost-e2e.sh "${{ runner.temp }}/ghost-e2e-closure"
 
-      - name: Build Ghost E2E Docker Image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: Dockerfile.production
-          target: e2e
-          load: true
-          tags: ghost-e2e:local
-          cache-from: type=gha,scope=ghost-e2e
-          cache-to: type=gha,mode=max,scope=ghost-e2e
-          build-args: |
-            NODE_VERSION=22.23.1
+      - name: Package Ghost E2E Micro-Docker Image
+        shell: bash
+        run: |
+          docker build \
+            -f e2e/Dockerfile.e2e-fast \
+            -t ghost-e2e:local \
+            "${{ runner.temp }}/ghost-e2e-closure"
+          rm -rf "${{ runner.temp }}/ghost-e2e-closure"
 
       - name: Verify E2E Image Assets
         shell: bash
@@ -510,13 +508,26 @@ jobs:
         run: |
           enve cache pull enve.lock -j 4 --cache "${CLOUDFLARE_BUCKET}" --trusted-public-key "${ENVE_CACHE_PUBLIC_KEY}" || true
 
+      - name: Restore pnpm package cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/share/pnpm/store
+          key: pnpm-store-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            pnpm-store-${{ runner.os }}-
+
+      - name: Link E2E Host Dependencies
+        shell: bash
+        run: |
+          enve run -- pnpm install --filter @tryghost/e2e... --frozen-lockfile --prefer-offline
+
       - name: Prepare E2E CI Runtime Services (MySQL tmpfs, Gateway, Runner)
         shell: bash
         env:
           GHOST_E2E_IMAGE: ghost-e2e:local
           GHOST_E2E_SKIP_IMAGE_BUILD: 'true'
           GHOST_E2E_ANALYTICS: 'false'
-        run: bash ./e2e/scripts/prepare-ci-e2e-job.sh
+        run: enve run -- bash ./e2e/scripts/prepare-ci-e2e-job.sh
 
       - name: Compute Balanced Shard Test Files
         id: shard_files

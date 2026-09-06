@@ -10,7 +10,17 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 cd "$REPO_ROOT"
 
-PLAYWRIGHT_VERSION="$(cd e2e && node -p "require('@playwright/test/package.json').version")"
+PLAYWRIGHT_VERSION="$(node -e "
+  try {
+    console.log(require('./e2e/node_modules/@playwright/test/package.json').version);
+  } catch {
+    const fs = require('fs');
+    const ws = fs.readFileSync('pnpm-workspace.yaml', 'utf8');
+    const m = ws.match(/['\"]@playwright\/test['\"]\s*:\s*['\"]?([0-9.]+)/);
+    if (m) console.log(m[1]);
+    else console.log('1.61.1');
+  }
+")"
 
 # Prefer the slim, Chromium-only runner image published to GHCR by
 # .github/workflows/e2e-runner-image.yml; fall back to the upstream all-browser
